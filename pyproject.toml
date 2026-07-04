@@ -1,0 +1,13 @@
+[project]
+name = "tarefeiro"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "dbt-core>=1.11.12",
+    "dbt-sqlite>=1.10.0",
+    "pandas>=3.0.3",
+    "prefect>=3.7.6",
+    "python-dotenv>=1.2.2",
+]
