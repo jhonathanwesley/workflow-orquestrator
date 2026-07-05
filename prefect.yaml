@@ -71,3 +71,19 @@ deployments:
     timezone: America/Sao_Paulo
     day_or: true
     active: true
+- name: send_game_offers
+  version:
+  tags: []
+  concurrency_limit:
+  description:
+  entrypoint: workflows\04_discord_alerts.py:main
+  parameters: {}
+  work_pool:
+    name: standard_local_dev_work_pool
+    work_queue_name:
+    job_variables: {}
+  schedules:
+  - cron: 30 0/6 * * *
+    timezone: America/Sao_Paulo
+    day_or: true
+    active: true

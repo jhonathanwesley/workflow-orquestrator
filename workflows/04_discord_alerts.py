@@ -20,56 +20,61 @@ def instantiate_df():
     return df
 
 @task(name="database_builder", retries=2, retry_delay_seconds=30)
-def db_build(df_size: int):
+def db_build(df_size: int, pages: int):
     """Builds or updates a Sqlite3 database with the information fetched from the API
     The Data is ordered by: 'savings', 'normalPrice', 'salePrice', 'steamRatingPercent'
 
-    max: df_size is 60 cause it's the API limit for each page.
+    pages: max pages to iterate in the API
     """
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
-        #'pageNumber': f'{page}'
         }
 
     params = {
         "sortBy": "savings"
     }
 
-    response = requests.get(
-        "https://www.cheapshark.com/api/1.0/deals?storeID=1&upperPrice=15",
-        headers=headers,
-        params=params
-    )
-
-    status_code = response.status_code
-    engine = get_engine()
-    content = response.json()
-
     df = instantiate_df()
-    if status_code == 200:
-        try:
-            df = pd.DataFrame(content)
-        except Exception as e:
-            print(f"[ERRO]: {e}")
 
-    elif status_code != 200:
-        try:
-            df.to_sql('games_saves', con=engine, if_exists='replace', index=False)
-        except Exception as e:
-            print(f"[ERRO] ao tentar salvar os dados: {e}")
+    for p in range(pages):
+        response = requests.get(
+            f"https://www.cheapshark.com/api/1.0/deals?pageNumber={p}",
+            headers=headers,
+            params=params
+        )
 
-    else:
-        stage = pd.DataFrame(content)
-        df = pd.concat([df, stage], ignore_index=True)
+        status_code = response.status_code
+        content = response.json()
 
-    df = df.sort_values(['savings', 'normalPrice', 'salePrice', 'steamRatingPercent'], ignore_index=True)[['title', 'savings', 'normalPrice', 'salePrice', 'steamRatingPercent', 'steamRatingText', 'thumb']]
-    df.to_sql('games_saves', con=engine, if_exists='replace', index=False)
+        engine = get_engine()
+        if status_code == 200 and p == 0:
+            try:
+                df = pd.DataFrame(content)
+            except Exception as e:
+                print(f"[ERRO]: {e}")
+        
+        elif status_code == 200 and p > 0:
+            stage = pd.DataFrame(content)
+            df = pd.concat([df, stage], ignore_index=True)
+
+        elif status_code != 200:
+            try:
+                df.to_sql('games_saves', con=engine, if_exists='replace', index=False)
+            except Exception as e:
+                print(f"[ERRO] ao tentar salvar os dados: {e}")
+
+        else:
+            stage = pd.DataFrame(content)
+            df = pd.concat([df, stage], ignore_index=True)
+
+        df = df.sort_values(['savings', 'normalPrice', 'salePrice', 'steamRatingPercent'], ignore_index=True)[['title', 'savings', 'normalPrice', 'salePrice', 'steamRatingPercent', 'steamRatingText', 'thumb']]
+        df.to_sql('games_saves', con=engine, if_exists='replace', index=False)
     return df.head(n=df_size)
 
 @task(name="messages_creator")
 def send_discord_message(top_n_games: int):
-    """Max top_n_games is 60"""
-    df = db_build(60)
+    """Max top_n_games is now limited by the max pages that the API is offering"""
+    df = db_build(df_size=240, pages=4)
 
     games_offers = f"# TOP {top_n_games} GAMES EM PROMOÇÃO AGORA:\n\n"
 
@@ -92,7 +97,7 @@ def send_discord_message(top_n_games: int):
 
 @flow(name="send_game_offers", retries=2, retry_delay_seconds=10)
 def main():
-    send_discord_message(top_n_games=60)
+    send_discord_message(top_n_games=240)
 
 if __name__=="__main__":
     main.deploy(
